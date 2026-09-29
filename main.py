@@ -126,22 +126,29 @@ class VocalisWirelessController:
                         
                         # الحالة الأولى: النظام لم تتم معايرته بعد
                         if not self.calibration_engine.is_calibrated:
-                            print("\n🎯 First valid word detected! Assuming it's the 'Start' calibration command.")
-                            # نرسل الكلمة المقصوصة (وليس الـ Buffer كامل) للمعايرة
+                            print("\n🎯 Valid word detected! Checking if it matches 'Start'...")
                             self.calibration_engine.discover_hardware_channels(word_segment.T)
                             
                             if self.calibration_engine.is_calibrated:
                                 self.load_active_rf_model(self.calibration_engine.channel_X, self.calibration_engine.channel_Y)
+                            else:
+                                print("🔄 Waiting for a clearer 'Start' command...")
                             
-                            # تفريغ الـ Buffer لعدم نطق الكلمة
+                            # تفريغ الـ Buffer في كلتا الحالتين
                             live_buffer = np.zeros((buffer_size, 2))
-                            continue # العودة للاستماع للكلمة التالية
+                            continue
                             
-                        # الحالة الثانية: النظام تمت معايرته مسبقاً (تشغيل الذكاء الاصطناعي الطبيعي)
+                        # الحالة الثانية: النظام تمت معايرته (تشغيل الموديل)
                         else:
                             features = self.extract_realtime_features(word_segment)
                             scaled_features = self.scaler.transform(features)
                             prediction = self.rf_model.predict(scaled_features)[0]
+                            
+                            # --- 🚨 اللوجيك الجديد: طباعة الكلمة بوضوح في الترمينال 🚨 ---
+                            print("\n" + "="*40)
+                            print(f" 🤖 AI PREDICTION: >>> {prediction.upper()} <<<")
+                            print("="*40 + "\n")
+                            # -------------------------------------------------------------
                             
                             if self.tts_engine:
                                 self.tts_engine.speak(prediction)
@@ -151,7 +158,7 @@ class VocalisWirelessController:
         except KeyboardInterrupt:
             print("\n🛑 Shutting down Wireless Server safely...")
             self.sock.close()
-            
+
 if __name__ == "__main__":
     server = VocalisWirelessController()
     server.run_live_server()

@@ -48,30 +48,23 @@ class VocalisCalibrationSystem:
         signal_A = live_2ch_signal[0]
         signal_B = live_2ch_signal[1]
         
-        # --- التعديل هنا لتوحيد طول المصفوفات ---
-        # الحصول على طول الكلمة الحالية وطول القالب العالمي
+        # توحيد الطول لتجنب الخطأ
         sig_len = len(signal_A)
         temp_len = self.start_word_template.shape[1]
-        
-        # اختيار الطول الأصغر لتجنب خطأ الـ ValueError
         min_len = min(sig_len, temp_len)
         
-        # قص الإشارة الحية لتطابق الطول
         sig_A_sliced = signal_A[:min_len]
         sig_B_sliced = signal_B[:min_len]
-        # -----------------------------------------
         
         best_idx_A, best_idx_B = -1, -1
         max_corr_A, max_corr_B = -1, -1
         
         for i in range(10):
-            # قص القالب أيضاً ليطابق الطول
             template_ch = self.start_word_template[i][:min_len]
             
             corr_A, _ = pearsonr(sig_A_sliced, template_ch)
             corr_B, _ = pearsonr(sig_B_sliced, template_ch)
             
-            # Polarity-invariant absolute correlation
             if abs(corr_A) > max_corr_A:
                 max_corr_A = abs(corr_A)
                 best_idx_A = i
@@ -80,18 +73,26 @@ class VocalisCalibrationSystem:
                 max_corr_B = abs(corr_B)
                 best_idx_B = i
 
-        # Remap slice index to physical anatomical channel designations (Ch 3 - Ch 12)
+        # --- 🚨 اللوجيك الجديد: فحص نسبة التطابق 🚨 ---
+        # إذا كانت نسبة التشابه أقل من 0.35، فهذه الكلمة غالباً ليست Start
+        CORR_THRESHOLD = 0.35 
+        if max_corr_A < CORR_THRESHOLD or max_corr_B < CORR_THRESHOLD:
+            print(f"⚠️ Low Match (A:{max_corr_A:.2f}, B:{max_corr_B:.2f}). That didn't look like 'Start'.")
+            self.is_calibrated = False
+            return # الخروج من الدالة بدون معايرة ليستمر في المحاولة
+        # ----------------------------------------------
+
         physical_ch_A = best_idx_A + 3
         physical_ch_B = best_idx_B + 3
         
-        # Order-invariant lexicographical sorting
         sorted_channels = sorted([physical_ch_A, physical_ch_B])
         self.channel_X = sorted_channels[0]
         self.channel_Y = sorted_channels[1]
         self.is_calibrated = True
         
-        print(f"[CALIBRATION SUCCESS] Electrodes Discovered at: Channel {self.channel_X} and Channel {self.channel_Y}")
-        print(f"Commanding Inference Engine to bind: models/model_{self.channel_X}_{self.channel_Y}.pkl")
+        # هذه السطور تطبع القنوات والموديل بوضوح في الشاشة
+        print(f"\n✅ [CALIBRATION SUCCESS] Electrodes Discovered at: Channel {self.channel_X} and Channel {self.channel_Y}")
+        print(f"⚙️ Commanding Inference Engine to bind: models/model_{self.channel_X}_{self.channel_Y}.pkl")
         
 if __name__ == "__main__":
     vocalis = VocalisCalibrationSystem()
