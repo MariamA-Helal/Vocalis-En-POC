@@ -39,10 +39,10 @@ class LiveSignalPreprocessor:
         return np.sqrt(np.mean(signal**2))
 
     def process_and_segment(self, raw_buffer, 
-                            threshold_multiplier=4.0, 
-                            min_duration_ms=180.0, 
-                            max_duration_ms=1200.0, 
-                            max_rms_threshold=4.5):
+                            threshold_multiplier=2.5,  # كان 4.0 (قللناه عشان يلقط الكلمة أسهل)
+                            min_duration_ms=100.0,     # كان 180 (عشان يقبل الكلمات السريعة)
+                            max_duration_ms=2000.0,    # كان 850 (وسعناه جداً لثانيتين)
+                            max_rms_threshold=50.0):   # كان 4.5 (رفعناه جداً عشان ميقصش الإشارة القوية)
         """
         Executes end-to-end DSP pipeline with physiological noise rejection gates.
         

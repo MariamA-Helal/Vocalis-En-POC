@@ -75,7 +75,7 @@ class VocalisCalibrationSystem:
 
         # --- 🚨 اللوجيك الجديد: فحص نسبة التطابق 🚨 ---
         # إذا كانت نسبة التشابه أقل من 0.35، فهذه الكلمة غالباً ليست Start
-        CORR_THRESHOLD = 0.35 
+        CORR_THRESHOLD = 0.10  # نسبة متساهلة جداً تكفي فقط لمعرفة أي قناة هي الأقوى
         if max_corr_A < CORR_THRESHOLD or max_corr_B < CORR_THRESHOLD:
             print(f"⚠️ Low Match (A:{max_corr_A:.2f}, B:{max_corr_B:.2f}). That didn't look like 'Start'.")
             self.is_calibrated = False
@@ -93,7 +93,7 @@ class VocalisCalibrationSystem:
         # هذه السطور تطبع القنوات والموديل بوضوح في الشاشة
         print(f"\n✅ [CALIBRATION SUCCESS] Electrodes Discovered at: Channel {self.channel_X} and Channel {self.channel_Y}")
         print(f"⚙️ Commanding Inference Engine to bind: models/model_{self.channel_X}_{self.channel_Y}.pkl")
-        
+
 if __name__ == "__main__":
     vocalis = VocalisCalibrationSystem()
     vocalis.load_universal_template()

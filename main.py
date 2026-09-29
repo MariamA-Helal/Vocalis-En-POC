@@ -111,20 +111,25 @@ class VocalisWirelessController:
                 sample_count += 1
                 
                 # 3. Process the data every 250 milliseconds
+                # 3. Process the data every 250 milliseconds
                 if sample_count >= 250:
                     sample_count = 0 
                     
-                    # Connection Watchdog (Check if electrodes fell off)
+                    # 1. فحص الـ Watchdog مع طباعة تحذير لو الحساس فاصل
                     if not self.calibration_engine.check_connection_watchdog(live_buffer.T):
+                        print("⚠️ Watchdog: Signal is flatlining (Zero Variance). Check cables!")
                         continue
                         
-                    # 💡 التعديل هنا: نمرر الإشارة للـ DSP أولاً لاكتشاف وتجاهل الضوضاء
+                    # 2. تمرير الإشارة للـ DSP
                     word_segment, status = self.dsp_engine.process_and_segment(live_buffer)
                     
-                    # إذا التقط الـ DSP كلمة حقيقية نظيفة
+                    # 🚨 طباعة حالة الـ DSP لتعرفي لماذا تم رفض الكلمة 🚨
+                    if status != "NO_BURST":
+                        print(f"🔎 DSP Status: {status}") 
+                    
+                    # 3. إذا تم قبول الإشارة
                     if status == "ACCEPTED" and word_segment is not None:
                         
-                        # الحالة الأولى: النظام لم تتم معايرته بعد
                         if not self.calibration_engine.is_calibrated:
                             print("\n🎯 Valid word detected! Checking if it matches 'Start'...")
                             self.calibration_engine.discover_hardware_channels(word_segment.T)
@@ -134,21 +139,17 @@ class VocalisWirelessController:
                             else:
                                 print("🔄 Waiting for a clearer 'Start' command...")
                             
-                            # تفريغ الـ Buffer في كلتا الحالتين
                             live_buffer = np.zeros((buffer_size, 2))
                             continue
                             
-                        # الحالة الثانية: النظام تمت معايرته (تشغيل الموديل)
                         else:
                             features = self.extract_realtime_features(word_segment)
                             scaled_features = self.scaler.transform(features)
                             prediction = self.rf_model.predict(scaled_features)[0]
                             
-                            # --- 🚨 اللوجيك الجديد: طباعة الكلمة بوضوح في الترمينال 🚨 ---
                             print("\n" + "="*40)
                             print(f" 🤖 AI PREDICTION: >>> {prediction.upper()} <<<")
                             print("="*40 + "\n")
-                            # -------------------------------------------------------------
                             
                             if self.tts_engine:
                                 self.tts_engine.speak(prediction)
