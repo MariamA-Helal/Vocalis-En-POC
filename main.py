@@ -96,10 +96,6 @@ class VocalisWirelessController:
                 data, addr = self.sock.recvfrom(1024) 
                 line = data.decode('utf-8').strip()
                 
-                # --- 🚨 سطر المراقبة الجديد 🚨 ---
-                print(f"DEBUG - Received from ESP: {line}")
-                # ---------------------------------
-                
                 if not line:
                     continue
                 
@@ -107,7 +103,6 @@ class VocalisWirelessController:
                     # Parse the string into two float values
                     ch1_val, ch2_val = map(float, line.split(','))
                 except ValueError:
-                    # Ignore corrupted packets caused by network jitter
                     continue 
                 
                 # 2. Shift the rolling buffer and append the new reading
@@ -115,7 +110,7 @@ class VocalisWirelessController:
                 live_buffer[-1] = [ch1_val, ch2_val]
                 sample_count += 1
                 
-                # 3. Process the data every 250 milliseconds (250 samples) to prevent CPU overload
+                # 3. Process the data every 250 milliseconds
                 if sample_count >= 250:
                     sample_count = 0 
                     
@@ -123,33 +118,40 @@ class VocalisWirelessController:
                     if not self.calibration_engine.check_connection_watchdog(live_buffer.T):
                         continue
                         
-                    # Discovery Phase (Auto-Calibration)
-                    if not self.calibration_engine.is_calibrated:
-                        self.calibration_engine.discover_hardware_channels(live_buffer.T)
-                        if self.calibration_engine.is_calibrated:
-                            self.load_active_rf_model(self.calibration_engine.channel_X, self.calibration_engine.channel_Y)
-                        continue
-
-                    # DSP Pipeline: Clean the signal and segment the active word
+                    # 💡 التعديل هنا: نمرر الإشارة للـ DSP أولاً لاكتشاف وتجاهل الضوضاء
                     word_segment, status = self.dsp_engine.process_and_segment(live_buffer)
                     
+                    # إذا التقط الـ DSP كلمة حقيقية نظيفة
                     if status == "ACCEPTED" and word_segment is not None:
-                        # 4. AI Inference & Audio Output
-                        features = self.extract_realtime_features(word_segment)
-                        scaled_features = self.scaler.transform(features)
-                        prediction = self.rf_model.predict(scaled_features)[0]
                         
-                        # Articulate the predicted word
-                        if self.tts_engine:
-                            self.tts_engine.speak(prediction)
-                        
-                        # Flush the buffer to zero to prevent double-triggering the same word
-                        live_buffer = np.zeros((buffer_size, 2))
+                        # الحالة الأولى: النظام لم تتم معايرته بعد
+                        if not self.calibration_engine.is_calibrated:
+                            print("\n🎯 First valid word detected! Assuming it's the 'Start' calibration command.")
+                            # نرسل الكلمة المقصوصة (وليس الـ Buffer كامل) للمعايرة
+                            self.calibration_engine.discover_hardware_channels(word_segment.T)
+                            
+                            if self.calibration_engine.is_calibrated:
+                                self.load_active_rf_model(self.calibration_engine.channel_X, self.calibration_engine.channel_Y)
+                            
+                            # تفريغ الـ Buffer لعدم نطق الكلمة
+                            live_buffer = np.zeros((buffer_size, 2))
+                            continue # العودة للاستماع للكلمة التالية
+                            
+                        # الحالة الثانية: النظام تمت معايرته مسبقاً (تشغيل الذكاء الاصطناعي الطبيعي)
+                        else:
+                            features = self.extract_realtime_features(word_segment)
+                            scaled_features = self.scaler.transform(features)
+                            prediction = self.rf_model.predict(scaled_features)[0]
+                            
+                            if self.tts_engine:
+                                self.tts_engine.speak(prediction)
+                            
+                            live_buffer = np.zeros((buffer_size, 2))
 
         except KeyboardInterrupt:
             print("\n🛑 Shutting down Wireless Server safely...")
             self.sock.close()
-
+            
 if __name__ == "__main__":
     server = VocalisWirelessController()
     server.run_live_server()

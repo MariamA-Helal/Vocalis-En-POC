@@ -48,13 +48,28 @@ class VocalisCalibrationSystem:
         signal_A = live_2ch_signal[0]
         signal_B = live_2ch_signal[1]
         
+        # --- التعديل هنا لتوحيد طول المصفوفات ---
+        # الحصول على طول الكلمة الحالية وطول القالب العالمي
+        sig_len = len(signal_A)
+        temp_len = self.start_word_template.shape[1]
+        
+        # اختيار الطول الأصغر لتجنب خطأ الـ ValueError
+        min_len = min(sig_len, temp_len)
+        
+        # قص الإشارة الحية لتطابق الطول
+        sig_A_sliced = signal_A[:min_len]
+        sig_B_sliced = signal_B[:min_len]
+        # -----------------------------------------
+        
         best_idx_A, best_idx_B = -1, -1
         max_corr_A, max_corr_B = -1, -1
         
         for i in range(10):
-            template_ch = self.start_word_template[i]
-            corr_A, _ = pearsonr(signal_A, template_ch)
-            corr_B, _ = pearsonr(signal_B, template_ch)
+            # قص القالب أيضاً ليطابق الطول
+            template_ch = self.start_word_template[i][:min_len]
+            
+            corr_A, _ = pearsonr(sig_A_sliced, template_ch)
+            corr_B, _ = pearsonr(sig_B_sliced, template_ch)
             
             # Polarity-invariant absolute correlation
             if abs(corr_A) > max_corr_A:
@@ -77,7 +92,7 @@ class VocalisCalibrationSystem:
         
         print(f"[CALIBRATION SUCCESS] Electrodes Discovered at: Channel {self.channel_X} and Channel {self.channel_Y}")
         print(f"Commanding Inference Engine to bind: models/model_{self.channel_X}_{self.channel_Y}.pkl")
-
+        
 if __name__ == "__main__":
     vocalis = VocalisCalibrationSystem()
     vocalis.load_universal_template()
