@@ -5,6 +5,7 @@ from scipy.stats import pearsonr
 class VocalisCalibrationSystem:
     """
     Zero-Latency Spatial Discovery & Auto-Calibration Engine.
+    Forced Calibration Mode: Accepts the FIRST detected burst as 'Start' unconditionally.
     Prevents duplicate channel assignment and restricts output strictly to Ch 3 - 12.
     """
     def __init__(self):
@@ -67,7 +68,7 @@ class VocalisCalibrationSystem:
                 corr_matrix[0, i] = 0
                 corr_matrix[1, i] = 0
 
-        # 1. منع الخطأ الرياضي اللي بيطلع القناة رقم 2
+        # 1. منع الخطأ الرياضي في حالة السكون التام
         if np.max(corr_matrix) == 0:
             print("❌ [DISCOVERY FAILED]: Zero correlation (Math error or flatline).")
             print("-" * 40)
@@ -105,20 +106,15 @@ class VocalisCalibrationSystem:
         print(f"   -> Channel A matches Template {physical_ch_A} (Score = {max_corr_A:.4f})")
         print(f"   -> Channel B matches Template {physical_ch_B} (Score = {max_corr_B:.4f})")
 
-        # 3. ضبط نسبة التطابق (Threshold آمن جداً 0.05)
-        CORR_THRESHOLD = 0.05 
-        if max_corr_A < CORR_THRESHOLD or max_corr_B < CORR_THRESHOLD:
-            print(f"❌ [DISCOVERY FAILED]: Match score is lower than threshold ({CORR_THRESHOLD}).")
-            print("   -> Reason: Please pronounce 'Start' slightly stronger.")
-            print("-" * 40)
-            self.is_calibrated = False
-            return 
+        # === 🚨 تم إلغاء شرط نسبة التطابق (CORR_THRESHOLD) تماماً 🚨 ===
+        # النظام سيعتبر هذه الكلمة هي الـ Start ويثبت القنوات فوراً!
 
         sorted_channels = sorted([physical_ch_A, physical_ch_B])
         self.channel_X = sorted_channels[0]
         self.channel_Y = sorted_channels[1]
         self.is_calibrated = True
         
-        print(f"✅ [CALIBRATION SUCCESS]: Electrodes Locked at: Ch {self.channel_X} & Ch {self.channel_Y}")
+        print(f"✅ [CALIBRATION SUCCESS]: First burst unconditionally accepted.")
+        print(f"✅ Electrodes Locked at: Ch {self.channel_X} & Ch {self.channel_Y}")
         print(f"⚙️  Commanding Inference Engine to bind: models/model_{self.channel_X}_{self.channel_Y}.pkl")
         print("-" * 40)
