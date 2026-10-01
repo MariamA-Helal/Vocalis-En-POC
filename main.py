@@ -12,7 +12,7 @@ from src.signal_preprocessor import LiveSignalPreprocessor
 try:
     from src.tts import VocalisTTS
 except ImportError:
-    from src.tts_engine import VocalisTTS
+    from src.tts import VocalisTTS
 
 class VocalisWirelessController:
     def __init__(self, host='0.0.0.0', port=12345):
