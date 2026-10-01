@@ -17,7 +17,7 @@ except ImportError:
 class VocalisWirelessController:
     def __init__(self, host='0.0.0.0', port=12345):
         print("=" * 60)
-        print("🚀 INITIALIZING VOCALIS WIRELESS EDGE SERVER (TRACE MODE)...")
+        print("🚀 INITIALIZING VOCALIS WIRELESS EDGE SERVER (FULL TRACE MODE)...")
         print("=" * 60)
         
         self.calibration_engine = VocalisCalibrationSystem()
@@ -58,18 +58,17 @@ class VocalisWirelessController:
         return np.array(features).reshape(1, -1)
 
     def load_active_rf_model(self, ch_x, ch_y):
-        # 🚨 التعديل هنا: المسار الآن يشير لفولدر الـ Random Forest 🚨
         model_path = os.path.join('RandomForestTrail', 'models_rf', f'model_{ch_x}_{ch_y}.pkl')
         scaler_path = os.path.join('RandomForestTrail', 'models_rf', f'scaler_{ch_x}_{ch_y}.pkl')
         
         if os.path.exists(model_path) and os.path.exists(scaler_path):
             self.rf_model = joblib.load(model_path)
             self.scaler = joblib.load(scaler_path)
-            print(f"🧠 Random Forest Engine armed with: {model_path}")
+            print(f"\n🧠 Random Forest Engine armed with: {model_path}")
             if self.tts_engine:
                 self.tts_engine.speak("System is ready.")
         else:
-            print(f"❌ Error: Model {model_path} missing. Check folder paths!")
+            print(f"\n❌ Error: Model {model_path} missing. Check folder paths!")
 
     def run_live_server(self):
         print("\n⏳ Waiting for ESP32 Wireless Stream... (Speak now)\n")
@@ -99,49 +98,63 @@ class VocalisWirelessController:
                     sample_count = 0 
                     
                     if not self.calibration_engine.check_connection_watchdog(live_buffer.T):
-                        print("⚠️ Watchdog: Signal is flatlining. Check electrodes!")
+                        sys.stdout.write("\r⚠️ Watchdog: Signal is flatlining. Check electrodes!          ")
+                        sys.stdout.flush()
                         continue
                         
-                    # --- تتبع مرحلة الـ DSP ---
+                    # حساب قوة الإشارة الحالية (الضوضاء أو الكلمة)
+                    current_raw_rms = np.sqrt(np.mean(live_buffer**2))
+                    
+                    # تمرير الإشارة للـ DSP
                     word_segment, status = self.dsp_engine.process_and_segment(live_buffer)
                     
-                    if status != "NO_BURST":
-                        print(f"\n⚙️ [PHASE 1: DSP GATE] -> Status: {status}")
+                    # 1. حالة الهدوء والضوضاء الطبيعية (طباعة في نفس السطر لتجنب الزحمة)
+                    if status == "NO_BURST":
+                        sys.stdout.write(f"\r📡 [LISTENING] Background Noise RMS: {current_raw_rms:.2f} | Status: {status}        ")
+                        sys.stdout.flush()
                     
-                    if status == "ACCEPTED" and word_segment is not None:
-                        # 1. استخراج وطباعة السمات 
-                        features = self.extract_realtime_features(word_segment)
-                        print("   -> Features extracted successfully.")
-                        
-                        # 2. مرحلة المعايرة
-                        if not self.calibration_engine.is_calibrated:
-                            self.calibration_engine.discover_hardware_channels(word_segment.T)
+                    # 2. حالة التقاط إشارة (سواء اتقبلت أو اترفضت)
+                    else:
+                        print(f"\n\n⚙️ [PHASE 1: DSP GATE] -> Burst Detected! Raw RMS: {current_raw_rms:.2f}")
+                        print(f"   -> DSP Decision: {status}")
+                    
+                        # 3. لو الإشارة سليمة واتقبلت
+                        if status == "ACCEPTED" and word_segment is not None:
+                            features = self.extract_realtime_features(word_segment)
+                            print("   -> Signal is clean. Features extracted successfully:")
+                            print(f"      [Ch A] RMS: {features[0][0]:.2f} | MAV: {features[0][1]:.2f} | WL: {features[0][2]:.2f}")
+                            print(f"      [Ch B] RMS: {features[0][6]:.2f} | MAV: {features[0][7]:.2f} | WL: {features[0][8]:.2f}")
                             
-                            if self.calibration_engine.is_calibrated:
-                                self.load_active_rf_model(self.calibration_engine.channel_X, self.calibration_engine.channel_Y)
-                            
-                            live_buffer = np.zeros((buffer_size, 2))
-                            continue
+                            # 4. مرحلة المعايرة (أول كلمة)
+                            if not self.calibration_engine.is_calibrated:
+                                self.calibration_engine.discover_hardware_channels(word_segment.T)
+                                
+                                if self.calibration_engine.is_calibrated:
+                                    self.load_active_rf_model(self.calibration_engine.channel_X, self.calibration_engine.channel_Y)
+                                
+                                live_buffer = np.zeros((buffer_size, 2))
+                                continue
 
-                        # 3. مرحلة الذكاء الاصطناعي والتنبؤ
-                        else:
-                            print("🧠 [PHASE 3: AI INFERENCE] -> Sending features to Random Forest...")
-                            scaled_features = self.scaler.transform(features)
-                            prediction = self.rf_model.predict(scaled_features)[0]
-                            
-                            print("\n" + "⭐"*20)
-                            print(f" 🤖 AI PREDICTION: >>> {prediction.upper()} <<<")
-                            print("⭐"*20 + "\n")
-                            
-                            if self.tts_engine:
-                                self.tts_engine.speak(prediction)
-                            
-                            live_buffer = np.zeros((buffer_size, 2))
+                            # 5. مرحلة الذكاء الاصطناعي
+                            else:
+                                print("🧠 [PHASE 3: AI INFERENCE] -> Routing features to Random Forest...")
+                                scaled_features = self.scaler.transform(features)
+                                prediction = self.rf_model.predict(scaled_features)[0]
+                                
+                                print("⭐"*40)
+                                print(f" 🤖 AI PREDICTION: >>> {prediction.upper()} <<<")
+                                print("⭐"*40 + "\n")
+                                
+                                if self.tts_engine:
+                                    self.tts_engine.speak(prediction)
+                                
+                                live_buffer = np.zeros((buffer_size, 2))
 
         except KeyboardInterrupt:
-            print("\n🛑 Shutting down Wireless Server safely...")
+            print("\n\n🛑 Shutting down Wireless Server safely...")
             self.sock.close()
 
 if __name__ == "__main__":
     server = VocalisWirelessController()
     server.run_live_server()
+
