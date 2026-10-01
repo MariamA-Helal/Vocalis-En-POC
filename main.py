@@ -1,11 +1,14 @@
-import warnings
-warnings.filterwarnings("ignore", category=UserWarning)
 import sys
 import os
 import time
 import socket
 import numpy as np
+import pandas as pd
 import joblib
+import warnings
+
+# === 1. إخفاء رسائل التحذير العامة ===
+warnings.filterwarnings("ignore", category=UserWarning)
 
 # Import core project modules
 from src.discovery_phase import VocalisCalibrationSystem
@@ -90,13 +93,13 @@ class VocalisWirelessController:
                 try:
                     ch1_val, ch2_val = map(float, line.split(','))
                     
-                    # === التعديل السحري هنا: Scaling the Hardware Gain ===
+                    # === 2. التعديل السحري هنا: Scaling the Hardware Gain ===
                     ch1_val = ch1_val / 1000.0
                     ch2_val = ch2_val / 1000.0
                     # ====================================================
                     
                 except ValueError:
-                    continue
+                    continue 
                 
                 live_buffer = np.roll(live_buffer, -1, axis=0)
                 live_buffer[-1] = [ch1_val, ch2_val]
@@ -110,30 +113,23 @@ class VocalisWirelessController:
                         sys.stdout.flush()
                         continue
                         
-                    # حساب قوة الإشارة الحالية (الضوضاء أو الكلمة)
                     current_raw_rms = np.sqrt(np.mean(live_buffer**2))
-                    
-                    # تمرير الإشارة للـ DSP
                     word_segment, status = self.dsp_engine.process_and_segment(live_buffer)
                     
-                    # 1. حالة الهدوء والضوضاء الطبيعية (طباعة في نفس السطر لتجنب الزحمة)
                     if status == "NO_BURST":
                         sys.stdout.write(f"\r📡 [LISTENING] Background Noise RMS: {current_raw_rms:.2f} | Status: {status}        ")
                         sys.stdout.flush()
                     
-                    # 2. حالة التقاط إشارة (سواء اتقبلت أو اترفضت)
                     else:
-                        print(f"\n\n⚙️ [PHASE 1: DSP GATE] -> Burst Detected! Raw RMS: {current_raw_rms:.2f}")
+                        print(f"\n\n⚙️ [PHASE 1: DSP GATE] -> Burst Detected! Scaled RMS: {current_raw_rms:.2f}")
                         print(f"   -> DSP Decision: {status}")
                     
-                        # 3. لو الإشارة سليمة واتقبلت
                         if status == "ACCEPTED" and word_segment is not None:
                             features = self.extract_realtime_features(word_segment)
                             print("   -> Signal is clean. Features extracted successfully:")
                             print(f"      [Ch A] RMS: {features[0][0]:.2f} | MAV: {features[0][1]:.2f} | WL: {features[0][2]:.2f}")
                             print(f"      [Ch B] RMS: {features[0][6]:.2f} | MAV: {features[0][7]:.2f} | WL: {features[0][8]:.2f}")
                             
-                            # 4. مرحلة المعايرة (أول كلمة)
                             if not self.calibration_engine.is_calibrated:
                                 self.calibration_engine.discover_hardware_channels(word_segment.T)
                                 
@@ -143,11 +139,26 @@ class VocalisWirelessController:
                                 live_buffer = np.zeros((buffer_size, 2))
                                 continue
 
-                            # 5. مرحلة الذكاء الاصطناعي
                             else:
                                 print("🧠 [PHASE 3: AI INFERENCE] -> Routing features to Random Forest...")
-                                scaled_features = self.scaler.transform(features)
+                                
+                                # === 3. فكرة ريهام العبقرية: مطابقة أسماء الأعمدة ===
+                                ch_x = self.calibration_engine.channel_X
+                                ch_y = self.calibration_engine.channel_Y
+                                
+                                # كتابة الـ 12 عمود بنفس الاسم اللي اتدرب عليهم الموديل بالظبط
+                                feature_columns = [
+                                    f'Ch{ch_x}_RMS', f'Ch{ch_x}_MAV', f'Ch{ch_x}_WL', f'Ch{ch_x}_ZCR', f'Ch{ch_x}_SSC', f'Ch{ch_x}_VAR',
+                                    f'Ch{ch_y}_RMS', f'Ch{ch_y}_MAV', f'Ch{ch_y}_WL', f'Ch{ch_y}_ZCR', f'Ch{ch_y}_SSC', f'Ch{ch_y}_VAR'
+                                ]
+                                
+                                # تحويل الـ features لـ DataFrame
+                                features_df = pd.DataFrame(features, columns=feature_columns)
+                                
+                                # دلوقتي الـ Scaler هيفرح جداً لأنه لقى نفس الأسماء اللي متعود عليها
+                                scaled_features = self.scaler.transform(features_df)
                                 prediction = self.rf_model.predict(scaled_features)[0]
+                                # =======================================================
                                 
                                 print("⭐"*40)
                                 print(f" 🤖 AI PREDICTION: >>> {prediction.upper()} <<<")
