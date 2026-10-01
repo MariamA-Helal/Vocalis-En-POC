@@ -9,7 +9,6 @@ import joblib
 
 class RandomForestBankTrainer:
     def __init__(self):
-        # Using the exact same spatial mapping for a fair comparison
         self.spatial_mapping = {
             3: [7, 8, 9, 10, 11, 12],
             4: [7, 8, 9, 10, 11, 12],
@@ -33,11 +32,19 @@ class RandomForestBankTrainer:
         return sorted(list(pairs))
 
     def load_dataset(self):
-        print("📥 Loading the complete features dataset for Random Forest...")
-        # Path assumes script is run from the root of the project
+        print("📥 Loading features dataset...")
         dataset_path = os.path.join(os.path.dirname(__file__), '..', 'dataset', 'vocalis_features.csv')
         self.df = pd.read_csv(dataset_path)
-        print(f"✅ Dataset loaded. Shape: {self.df.shape}")
+        
+        # =================================================================
+        # 🚨 التعديل السحري: مسح كلمة REST من ذاكرة الموديل تماماً 🚨
+        # بما إن الـ DSP هو اللي بيصطاد الكلام، الموديل مش محتاج يكتشف السكون.
+        # =================================================================
+        initial_shape = self.df.shape
+        # استبعاد أي صف يحتوي على كلمة rest أو silence
+        self.df = self.df[~self.df['Label'].astype(str).str.lower().isin(['rest', 'silence', 'null'])]
+        
+        print(f"✅ Dataset loaded. Shape dropped from {initial_shape} to {self.df.shape} (REST Deleted!)")
 
     def train_pair(self, ch_X, ch_Y):
         columns_to_keep = ['Label']
@@ -55,15 +62,12 @@ class RandomForestBankTrainer:
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
         
-        # Here is the change: Using Random Forest instead of SVM
-        # n_estimators=100 means 100 decision trees voting together
         model = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1) 
         model.fit(X_train_scaled, y_train)
         
         y_pred = model.predict(X_test_scaled)
         accuracy = accuracy_score(y_test, y_pred)
         
-        # Save to a separate folder so it doesn't overwrite your SVM models!
         save_dir = os.path.join(os.path.dirname(__file__), 'models_rf')
         os.makedirs(save_dir, exist_ok=True)
         joblib.dump(model, os.path.join(save_dir, f'model_{ch_X}_{ch_Y}.pkl'))
@@ -73,16 +77,9 @@ class RandomForestBankTrainer:
 
     def train_all_models(self):
         self.load_dataset()
-        print(f"\n🚀 Starting Random Forest Training for {len(self.unique_pairs)} Pairs...\n")
-        
-        accuracies = []
         for idx, (ch_X, ch_Y) in enumerate(self.unique_pairs):
             acc = self.train_pair(ch_X, ch_Y)
-            accuracies.append(acc)
-            print(f"🌲 RF Model (Ch {ch_X} & Ch {ch_Y}) -> Accuracy: {acc * 100:.2f}%")
-            
-        print(f"\n🎉 All RF Models saved in 'RandomForestTrail/models_rf' folder!")
-        print(f"📊 RF Average System Accuracy: {sum(accuracies)/len(accuracies) * 100:.2f}%")
+            print(f"🌲 RF Model & Scaler (Ch {ch_X} & Ch {ch_Y}) Generated -> Accuracy: {acc * 100:.2f}%")
 
 if __name__ == "__main__":
     rf_trainer = RandomForestBankTrainer()
