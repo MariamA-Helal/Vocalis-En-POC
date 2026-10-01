@@ -10,7 +10,6 @@ class LiveSignalPreprocessor:
         self.fs = fs
         self.nyq = 0.5 * self.fs
         
-        # Pre-compute filter coefficients
         self.b_band, self.a_band = butter(4, [lowcut / self.nyq, highcut / self.nyq], btype='bandpass')
         self.b_notch, self.a_notch = iirnotch(notch_freq / self.nyq, notch_q)
 
@@ -33,12 +32,12 @@ class LiveSignalPreprocessor:
     def calc_rms(self, signal):
         return np.sqrt(np.mean(signal**2))
 
-    # ====== التعديل هنا: رفعنا الـ RMS لـ 3000 ======
+    # ====== التعديلات السحرية هنا: بوابات مفتوحة على مصراعيها ======
     def process_and_segment(self, raw_buffer, 
-                            threshold_multiplier=2.0,  
-                            min_duration_ms=100.0,     
-                            max_duration_ms=2000.0,    
-                            max_rms_threshold=2000.0): 
+                            threshold_multiplier=1.2,  # حساس جداً (أي حركة فوق الهدوء بـ 20% هتتقبل)
+                            min_duration_ms=50.0,      # يقبل إشارات قصيرة جداً
+                            max_duration_ms=3000.0,    # يقبل إشارات طويلة جداً (3 ثواني)
+                            max_rms_threshold=99999.0): # مفتوح بلا حدود
         """
         Executes end-to-end DSP pipeline with physiological noise rejection gates.
         """

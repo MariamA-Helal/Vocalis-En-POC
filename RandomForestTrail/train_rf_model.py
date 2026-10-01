@@ -10,16 +10,11 @@ import joblib
 class RandomForestBankTrainer:
     def __init__(self):
         self.spatial_mapping = {
-            3: [7, 8, 9, 10, 11, 12],
-            4: [7, 8, 9, 10, 11, 12],
-            5: [9, 10, 11, 12],
-            6: [9, 10, 11, 12],
-            7: [3, 4, 11, 12],
-            8: [3, 4, 11, 12],
-            9: [3, 4, 5, 6],
-            10: [3, 4, 5, 6],
-            11: [3, 4, 5, 6, 7, 8],
-            12: [3, 4, 5, 6, 7, 8]
+            3: [7, 8, 9, 10, 11, 12], 4: [7, 8, 9, 10, 11, 12],
+            5: [9, 10, 11, 12], 6: [9, 10, 11, 12],
+            7: [3, 4, 11, 12], 8: [3, 4, 11, 12],
+            9: [3, 4, 5, 6], 10: [3, 4, 5, 6],
+            11: [3, 4, 5, 6, 7, 8], 12: [3, 4, 5, 6, 7, 8]
         }
         self.unique_pairs = self._generate_unique_pairs()
 
@@ -36,15 +31,14 @@ class RandomForestBankTrainer:
         dataset_path = os.path.join(os.path.dirname(__file__), '..', 'dataset', 'vocalis_features.csv')
         self.df = pd.read_csv(dataset_path)
         
-        # =================================================================
-        # 🚨 التعديل السحري: مسح كلمة REST من ذاكرة الموديل تماماً 🚨
-        # بما إن الـ DSP هو اللي بيصطاد الكلام، الموديل مش محتاج يكتشف السكون.
-        # =================================================================
         initial_shape = self.df.shape
-        # استبعاد أي صف يحتوي على كلمة rest أو silence
-        self.df = self.df[~self.df['Label'].astype(str).str.lower().isin(['rest', 'silence', 'null'])]
         
-        print(f"✅ Dataset loaded. Shape dropped from {initial_shape} to {self.df.shape} (REST Deleted!)")
+        # === 🚨 التعديل الصارم: الاحتفاظ بالكلمات دي فقط ومسح أي شيء آخر 🚨 ===
+        valid_commands = ['up', 'down', 'left', 'right', 'forward', 'backward', 'start', 'stop']
+        self.df = self.df[self.df['Label'].astype(str).str.lower().isin(valid_commands)]
+        # ====================================================================
+        
+        print(f"✅ Dataset loaded. Shape dropped from {initial_shape} to {self.df.shape} (REST is DEAD!)")
 
     def train_pair(self, ch_X, ch_Y):
         columns_to_keep = ['Label']
