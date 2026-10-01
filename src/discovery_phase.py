@@ -116,5 +116,6 @@ class VocalisCalibrationSystem:
         
         print(f"✅ [CALIBRATION SUCCESS]: First burst unconditionally accepted.")
         print(f"✅ Electrodes Locked at: Ch {self.channel_X} & Ch {self.channel_Y}")
-        print(f"⚙️  Commanding Inference Engine to bind: models/model_{self.channel_X}_{self.channel_Y}.pkl")
+        # التعديل هنا في السطر ده بس:
+        print(f"⚙️  Commanding Inference Engine to bind: RandomForestTrail/models_rf/model_{self.channel_X}_{self.channel_Y}.pkl")
         print("-" * 40)

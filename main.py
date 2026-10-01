@@ -1,3 +1,5 @@
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
 import sys
 import os
 import time
@@ -87,8 +89,14 @@ class VocalisWirelessController:
                 
                 try:
                     ch1_val, ch2_val = map(float, line.split(','))
+                    
+                    # === التعديل السحري هنا: Scaling the Hardware Gain ===
+                    ch1_val = ch1_val / 1000.0
+                    ch2_val = ch2_val / 1000.0
+                    # ====================================================
+                    
                 except ValueError:
-                    continue 
+                    continue
                 
                 live_buffer = np.roll(live_buffer, -1, axis=0)
                 live_buffer[-1] = [ch1_val, ch2_val]
