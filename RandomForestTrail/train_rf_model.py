@@ -33,12 +33,12 @@ class RandomForestBankTrainer:
         
         initial_shape = self.df.shape
         
-        # === 🚨 التعديل الصارم: الاحتفاظ بالكلمات دي فقط ومسح أي شيء آخر 🚨 ===
-        valid_commands = ['up', 'down', 'left', 'right', 'forward', 'backward', 'start', 'stop']
+        # === 🚨 التعديل الأول: 4 كلمات فقط للعرض العملي (POC) 🚨 ===
+        # ده هيرفع الـ Accuracy جداً وهيخلي الموديل يقدر يفرق بينهم بقناتين بس
+        valid_commands = ['up', 'down', 'start', 'stop']
         self.df = self.df[self.df['Label'].astype(str).str.lower().isin(valid_commands)]
-        # ====================================================================
         
-        print(f"✅ Dataset loaded. Shape dropped from {initial_shape} to {self.df.shape} (REST is DEAD!)")
+        print(f"✅ Dataset loaded. Shape dropped from {initial_shape} to {self.df.shape} (Focused 4-Word POC)")
 
     def train_pair(self, ch_X, ch_Y):
         columns_to_keep = ['Label']
@@ -56,7 +56,9 @@ class RandomForestBankTrainer:
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
         
-        model = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1) 
+        # === 🚨 التعديل الثاني: منع الـ Overfitting وحل مشكلة الـ 75 ميجا 🚨 ===
+        # max_depth=10 هيخلي حجم الموديل صغير جداً (GitHub مش هيعترض)
+        model = RandomForestClassifier(n_estimators=50, max_depth=10, random_state=42, n_jobs=-1) 
         model.fit(X_train_scaled, y_train)
         
         y_pred = model.predict(X_test_scaled)
