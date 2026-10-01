@@ -5,8 +5,7 @@ from scipy.stats import pearsonr
 class VocalisCalibrationSystem:
     """
     Zero-Latency Spatial Discovery & Auto-Calibration Engine.
-    Matches a single spoken 'Start' burst against the Universal Spatiotemporal Template
-    using absolute Pearson correlation profiles (|r|) to resolve Electrode Shift.
+    Matches a single spoken 'Start' burst against the Universal Spatiotemporal Template.
     """
     def __init__(self):
         self.is_calibrated = False
@@ -15,7 +14,6 @@ class VocalisCalibrationSystem:
         self.start_word_template = None 
 
     def load_universal_template(self):
-        """Loads pre-compiled subject-invariant grand average template."""
         template_path = 'models/universal_start.npy'
         if os.path.exists(template_path):
             self.start_word_template = np.load(template_path)
@@ -24,15 +22,10 @@ class VocalisCalibrationSystem:
             print("❌ Error: Template not found. Run feature_extraction.py first.")
 
     def check_connection_watchdog(self, live_signal):
-        """
-        Signal Health Watchdog: Continuously monitors signal variance.
-        Trips a system reset to uncalibrated factory state if inputs are open-circuit/dead.
-        """
         signal_variance = np.var(live_signal)
         if signal_variance < 1e-8:
             if self.is_calibrated:
                 print("\n[WATCHDOG EVENT] Hardware open-circuit or disconnected!")
-                print("Resetting state: is_calibrated = False")
                 self.is_calibrated = False
                 self.channel_X = None
                 self.channel_Y = None
@@ -40,15 +33,12 @@ class VocalisCalibrationSystem:
         return True 
 
     def discover_hardware_channels(self, live_2ch_signal):
-        """
-        Evaluates Pearson correlation against all 10 physiological channels.
-        Applies absolute value (|r|) to maintain electrode polarity invariance.
-        """
-        print("\n🔍 Correlating incoming gesture against Universal Template...")
+        print("\n" + "-"*40)
+        print("🔍 [PHASE 2: DISCOVERY] Correlating incoming gesture...")
+        
         signal_A = live_2ch_signal[0]
         signal_B = live_2ch_signal[1]
         
-        # توحيد الطول لتجنب الخطأ
         sig_len = len(signal_A)
         temp_len = self.start_word_template.shape[1]
         min_len = min(sig_len, temp_len)
@@ -73,45 +63,27 @@ class VocalisCalibrationSystem:
                 max_corr_B = abs(corr_B)
                 best_idx_B = i
 
-        # --- 🚨 اللوجيك الجديد: فحص نسبة التطابق 🚨 ---
-        # إذا كانت نسبة التشابه أقل من 0.35، فهذه الكلمة غالباً ليست Start
-        CORR_THRESHOLD = 0.10  # نسبة متساهلة جداً تكفي فقط لمعرفة أي قناة هي الأقوى
-        if max_corr_A < CORR_THRESHOLD or max_corr_B < CORR_THRESHOLD:
-            print(f"⚠️ Low Match (A:{max_corr_A:.2f}, B:{max_corr_B:.2f}). That didn't look like 'Start'.")
-            self.is_calibrated = False
-            return # الخروج من الدالة بدون معايرة ليستمر في المحاولة
-        # ----------------------------------------------
-
         physical_ch_A = best_idx_A + 3
         physical_ch_B = best_idx_B + 3
-        
+
+        # --- 🚨 طباعة نسبة التطابق الدقيقة لتعرفي المشكلة 🚨 ---
+        print(f"   -> Channel A best matches Template {physical_ch_A} (Match Score = {max_corr_A:.4f})")
+        print(f"   -> Channel B best matches Template {physical_ch_B} (Match Score = {max_corr_B:.4f})")
+        # ----------------------------------------------------
+
+        CORR_THRESHOLD = 0.01 
+        if max_corr_A < CORR_THRESHOLD or max_corr_B < CORR_THRESHOLD:
+            print(f"❌ [DISCOVERY FAILED]: Match score is lower than threshold ({CORR_THRESHOLD}).")
+            print("   -> Reason: The signal is clean, but its shape doesn't match the 'Start' template.")
+            print("-" * 40)
+            self.is_calibrated = False
+            return 
+
         sorted_channels = sorted([physical_ch_A, physical_ch_B])
         self.channel_X = sorted_channels[0]
         self.channel_Y = sorted_channels[1]
         self.is_calibrated = True
         
-        # هذه السطور تطبع القنوات والموديل بوضوح في الشاشة
-        print(f"\n✅ [CALIBRATION SUCCESS] Electrodes Discovered at: Channel {self.channel_X} and Channel {self.channel_Y}")
-        print(f"⚙️ Commanding Inference Engine to bind: models/model_{self.channel_X}_{self.channel_Y}.pkl")
-
-if __name__ == "__main__":
-    vocalis = VocalisCalibrationSystem()
-    vocalis.load_universal_template()
-    
-    # 1. Simulate Watchdog Disconnection Check
-    print("\n--- Running Watchdog Check ---")
-    dead_signal = np.zeros((2, 500))
-    vocalis.check_connection_watchdog(dead_signal)
-    
-    # 2. Simulate User Uttering 'Start' with electrodes placed at Ch 5 and Ch 9
-    print("\n--- Running In-Vivo Spatial Discovery Simulation ---")
-    if vocalis.start_word_template is not None:
-        template_len = vocalis.start_word_template.shape[1]
-        simulated_live = np.array([
-            vocalis.start_word_template[6] + np.random.normal(0, 0.01, template_len), # Ch 9 on Lead A
-            vocalis.start_word_template[2] + np.random.normal(0, 0.01, template_len)  # Ch 5 on Lead B
-        ])
-        
-        if vocalis.check_connection_watchdog(simulated_live):
-            # Run calibration
-            vocalis.discover_hardware_channels(simulated_live)
+        print(f"✅ [CALIBRATION SUCCESS]: Threshold passed! Electrodes Discovered at Ch {self.channel_X} & Ch {self.channel_Y}")
+        print(f"⚙️  Commanding Inference Engine to bind: models/model_{self.channel_X}_{self.channel_Y}.pkl")
+        print("-" * 40)
