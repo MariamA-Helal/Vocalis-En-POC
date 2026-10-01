@@ -9,7 +9,7 @@ import joblib
 from src.discovery_phase import VocalisCalibrationSystem
 from src.signal_preprocessor import LiveSignalPreprocessor
 
-ttry:
+try:
     from src.tts import VocalisTTS
 except ImportError:
     from src.tts_engine import VocalisTTS  
