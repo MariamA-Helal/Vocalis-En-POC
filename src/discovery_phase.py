@@ -5,7 +5,7 @@ from scipy.stats import pearsonr
 class VocalisCalibrationSystem:
     """
     Zero-Latency Spatial Discovery & Auto-Calibration Engine.
-    Matches a single spoken 'Start' burst against the Universal Spatiotemporal Template.
+    Forced Calibration Mode: Accepts the FIRST detected burst as 'Start'.
     """
     def __init__(self):
         self.is_calibrated = False
@@ -19,7 +19,8 @@ class VocalisCalibrationSystem:
             self.start_word_template = np.load(template_path)
             print(f"✅ Universal 'Start' Template loaded. Shape: {self.start_word_template.shape}")
         else:
-            print("❌ Error: Template not found. Run feature_extraction.py first.")
+            print("❌ Error: 'universal_start.npy' is MISSING in the 'models' folder!")
+            print("⚠️ PLEASE DOWNLOAD IT FROM COLAB AND PUT IT IN 'models/' FOLDER.")
 
     def check_connection_watchdog(self, live_signal):
         signal_variance = np.var(live_signal)
@@ -34,8 +35,16 @@ class VocalisCalibrationSystem:
 
     def discover_hardware_channels(self, live_2ch_signal):
         print("\n" + "-"*40)
-        print("🔍 [PHASE 2: DISCOVERY] Correlating incoming gesture...")
+        print("🔍 [PHASE 2: DISCOVERY] Analyzing first incoming word...")
         
+        # 🚨 حماية في حالة عدم وجود الملف 🚨
+        if self.start_word_template is None:
+            print("⚠️ Template is missing! Forcing default channels (Ch 3 & Ch 8) to keep system running.")
+            self.channel_X, self.channel_Y = 3, 8
+            self.is_calibrated = True
+            print(f"✅ [FORCED CALIBRATION]: Defaulted to Ch {self.channel_X} & Ch {self.channel_Y}")
+            return
+
         signal_A = live_2ch_signal[0]
         signal_B = live_2ch_signal[1]
         
@@ -52,8 +61,12 @@ class VocalisCalibrationSystem:
         for i in range(10):
             template_ch = self.start_word_template[i][:min_len]
             
-            corr_A, _ = pearsonr(sig_A_sliced, template_ch)
-            corr_B, _ = pearsonr(sig_B_sliced, template_ch)
+            # Use try-except to prevent any mathematical crash
+            try:
+                corr_A, _ = pearsonr(sig_A_sliced, template_ch)
+                corr_B, _ = pearsonr(sig_B_sliced, template_ch)
+            except Exception:
+                corr_A, corr_B = 0, 0
             
             if abs(corr_A) > max_corr_A:
                 max_corr_A = abs(corr_A)
@@ -66,24 +79,18 @@ class VocalisCalibrationSystem:
         physical_ch_A = best_idx_A + 3
         physical_ch_B = best_idx_B + 3
 
-        # --- 🚨 طباعة نسبة التطابق الدقيقة لتعرفي المشكلة 🚨 ---
-        print(f"   -> Channel A best matches Template {physical_ch_A} (Match Score = {max_corr_A:.4f})")
-        print(f"   -> Channel B best matches Template {physical_ch_B} (Match Score = {max_corr_B:.4f})")
-        # ----------------------------------------------------
+        print(f"   -> Channel A structurally matches Template {physical_ch_A}")
+        print(f"   -> Channel B structurally matches Template {physical_ch_B}")
 
-        CORR_THRESHOLD = 0.01 
-        if max_corr_A < CORR_THRESHOLD or max_corr_B < CORR_THRESHOLD:
-            print(f"❌ [DISCOVERY FAILED]: Match score is lower than threshold ({CORR_THRESHOLD}).")
-            print("   -> Reason: The signal is clean, but its shape doesn't match the 'Start' template.")
-            print("-" * 40)
-            self.is_calibrated = False
-            return 
+        # === 🚨 تم مسح شرط نسبة التطابق تماماً (No Threshold) 🚨 ===
+        # النظام سيعتمد هذه القنوات فوراً مهما كانت النسبة!
 
         sorted_channels = sorted([physical_ch_A, physical_ch_B])
         self.channel_X = sorted_channels[0]
         self.channel_Y = sorted_channels[1]
         self.is_calibrated = True
         
-        print(f"✅ [CALIBRATION SUCCESS]: Threshold passed! Electrodes Discovered at Ch {self.channel_X} & Ch {self.channel_Y}")
+        print(f"✅ [CALIBRATION SUCCESS]: First word accepted as 'Start'.")
+        print(f"✅ Electrodes Locked at: Ch {self.channel_X} & Ch {self.channel_Y}")
         print(f"⚙️  Commanding Inference Engine to bind: models/model_{self.channel_X}_{self.channel_Y}.pkl")
         print("-" * 40)

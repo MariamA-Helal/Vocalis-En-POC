@@ -7,7 +7,7 @@ import serial # Requires: pip install pyserial
 
 from src.discovery_phase import VocalisCalibrationSystem
 from src.signal_preprocessor import LiveSignalPreprocessor
-from src.tts_engine import VocalisTTS
+from src.tts import VocalisTTS
 
 class VocalisUSBController:
     def __init__(self, com_port='COM3', baud_rate=115200):

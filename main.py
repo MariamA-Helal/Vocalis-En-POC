@@ -9,10 +9,10 @@ import joblib
 from src.discovery_phase import VocalisCalibrationSystem
 from src.signal_preprocessor import LiveSignalPreprocessor
 
-try:
+ttry:
     from src.tts import VocalisTTS
 except ImportError:
-    from src.tts import VocalisTTS
+    from src.tts_engine import VocalisTTS  
 
 class VocalisWirelessController:
     def __init__(self, host='0.0.0.0', port=12345):
@@ -58,17 +58,18 @@ class VocalisWirelessController:
         return np.array(features).reshape(1, -1)
 
     def load_active_rf_model(self, ch_x, ch_y):
-        model_path = os.path.join('models', f'model_{ch_x}_{ch_y}.pkl')
-        scaler_path = os.path.join('models', f'scaler_{ch_x}_{ch_y}.pkl')
+        # 🚨 التعديل هنا: المسار الآن يشير لفولدر الـ Random Forest 🚨
+        model_path = os.path.join('RandomForestTrail', 'models_rf', f'model_{ch_x}_{ch_y}.pkl')
+        scaler_path = os.path.join('RandomForestTrail', 'models_rf', f'scaler_{ch_x}_{ch_y}.pkl')
         
         if os.path.exists(model_path) and os.path.exists(scaler_path):
             self.rf_model = joblib.load(model_path)
             self.scaler = joblib.load(scaler_path)
-            print(f"🧠 Random Forest Engine armed with: model_{ch_x}_{ch_y}.pkl")
+            print(f"🧠 Random Forest Engine armed with: {model_path}")
             if self.tts_engine:
                 self.tts_engine.speak("System is ready.")
         else:
-            print(f"❌ Error: Model {model_path} missing.")
+            print(f"❌ Error: Model {model_path} missing. Check folder paths!")
 
     def run_live_server(self):
         print("\n⏳ Waiting for ESP32 Wireless Stream... (Speak now)\n")
